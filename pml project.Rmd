@@ -1,0 +1,83 @@
+---
+title: "Practical Machine Learning Course Project"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE, eval = FALSE)
+```
+### RMA - 2/19/17
+## Background
+Using devices such as Jawbone Up, Nike FuelBand, and Fitbit it is now possible to collect a large amount of data about personal activity relatively inexpensively. These type of devices are part of the quantified self movement - a group of enthusiasts who take measurements about themselves regularly to improve their health, to find patterns in their behavior, or because they are tech geeks. One thing that people regularly do is quantify how much of a particular activity they do, but they rarely quantify how well they do it. In this project data is used from accelerometers on the belt, forearm, arm, and dumbell of 6 participants. They were asked to perform barbell lifts correctly and incorrectly in 5 different ways. 
+
+## Purpose
+The intent of this project is to use practical machine learning techniques to predict the manner in which the participants did the exercise from the test dataset. 
+
+## Methods
+First I loaded in the data and then removed columns from the dataset that were near singular as well as columns that weren't relevant to prediction (i.e. paricipant name). Then I made sure the final testing set had the same columns as my training set.
+```{r , eval=TRUE, warning=FALSE, message=FALSE}
+# Load packages
+library(e1071)
+library(caret)
+library(gbm)
+library(dplyr)
+library(randomForest)
+```
+
+```{r}
+# Load the data
+train0 <- read.csv('pml-training.csv') %>% mutate(classe = as.factor(classe))
+test0 <- read.csv('pml-testing.csv') 
+
+# Get rid of NA columns and columns without much variability
+train1 <- train0[, colSums(is.na(train0)) == 0]
+train2 <- train1[,-nearZeroVar(train1)] %>% dplyr::select(-user_name,-cvtd_timestamp, -X)
+
+# Same transformations for test dataset
+test2 <- test0[,which(names(test0) %in% colnames(train2))]
+```
+
+Next I partitioned the original training set into another training and testing set for cross validation.
+```{r}
+set.seed(100)
+keep <- createDataPartition(train2$classe, p = .8, list = FALSE)
+train <- train2[keep,]
+test <- train2[-keep,]
+```
+
+I then trained models on the training data using random forests, gradient boosted machines, and support vector machines. After, I used these models to attempt to predict on the "out of sample"" test set.
+```{r}
+mod_rf <- train(classe ~ ., data = train, method = 'rf', tuneLength = 1)
+mod_gbm <- train(classe ~ ., data = train, method = 'gbm')
+mod_svm <- svm(classe ~ ., data = train, tuneLength = 1)
+
+pred_rf <- predict(mod_rf,test[,-nrow(test)])
+pred_gbm <- predict(mod_gbm, test[,-nrow(test)])
+pred_svm <- predict(mod_svm, test[,-nrow(test)])
+```
+
+```{r, eval = TRUE, echo = FALSE}
+setwd('~/DS Coursera')
+load('weights.RData')
+```
+
+I used out of sample accuracy to determine which model predicted the best. The following outputs display the accuracy of each model. 
+```{r , eval = TRUE}
+## Random Forest
+confusionMatrix(pred_rf, test$classe)$overall
+## GBM
+confusionMatrix(pred_gbm, test$classe)$overall
+## Support Vector Machine
+confusionMatrix(pred_svm, test$classe)$overall
+```
+
+The Random Forest model has the largest out of sample accuracy so I used it for my final prediction.
+The expected out of sample error for this models is 0.0011.
+
+## Results
+These are the final prediction results for the test samples.
+```{r , eval = TRUE}
+final_pred <- predict(mod_rf, test2)
+final_pred
+```
+
